@@ -1,0 +1,9 @@
+InheritParentConfig: true
+Checks: '
+    -cppcoreguidelines-avoid-magic-numbers,
+    -cppcoreguidelines-non-private-member-variables-in-classes,
+    -google-readability-avoid-underscore-in-googletest-name,
+    -readability-function-cognitive-complexity,
+    -readability-magic-numbers,
+    -misc-non-private-member-variables-in-classes,
+    '
