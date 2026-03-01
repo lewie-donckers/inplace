@@ -1,0 +1,19 @@
+﻿---
+BasedOnStyle: Google
+
+ColumnLimit: 120
+IndentWidth: 4
+AccessModifierOffset: -4
+DerivePointerAlignment: false
+CommentPragmas: "^ NOLINT"
+
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^"'
+    Priority: 1
+  - Regex: "^<inplace/"
+    Priority: 2
+  - Regex: "^<.*/"
+    Priority: 3
+  - Regex: '^<[^/\.]*$'
+    Priority: 4

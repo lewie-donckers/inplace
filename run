@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
+
+import glob
+import itertools
+import os
+
+import __main__
+
+import tools.runner as runner
+
+
+def get_cpp_files():
+    files = []
+    for code_folder in ["include", "test/unit"]:
+        files.extend(
+            glob.glob(os.path.join(code_folder, "**", "*.[ch]pp"), recursive=True)
+        )
+    return [os.path.relpath(file) for file in files]
+
+
+def get_python_files():
+    files = ["run"]
+    for code_folder in ["tools"]:
+        files.extend(glob.glob(os.path.join(code_folder, "**", "*.py"), recursive=True))
+    return [os.path.relpath(file) for file in files]
+
+
+def docker_image_for(tag):
+    return f"lewiedonckers/inplace-library-build:0.1-{tag}"
+
+
+def toolchain_path(file):
+    return os.path.abspath(f"tools/cmake/{file}")
+
+
+class Clean(runner.Action):
+    def __init__(self):
+        super().__init__(self, "clean", help="clean the build folder")
+
+    def run(self):
+        # TODO use full path for safety
+        runner.execute_command(["rm", "-rf", "build"])
+
+
+class UnitTest(runner.Action):
+    def __init__(self):
+        super().__init__(
+            self,
+            "unittest",
+            help="build and run unit tests",
+            restart_support=True,
+        )
+        self._compilers = {
+            "gcc15": {"cxx_compiler": "g++-15"},
+            "gcc14": {"cxx_compiler": "g++-14"},
+            "clang21": {"cxx_compiler": "clang++-21"},
+            "clang20": {"cxx_compiler": "clang++-20"},
+            "gcc15-armhf": {
+                "toolchain": toolchain_path("gcc15-arm-linux-gnueabihf.cmake"),
+                "emulator": "qemu-armhf",
+            },
+            "gcc15-arm64": {
+                "toolchain": toolchain_path("gcc15-aarch64-linux-gnu.cmake"),
+                "emulator": "qemu-arm64",
+            },
+        }
+        self._build_types = ["debug", "release"]
+        self._profiles = ["default", "constrained"]
+        self._instrumentations = [
+            "none",
+            "coverage",
+            "sanitize-thread",
+            "sanitize-other",
+        ]
+
+    def setup_parser(self, parser):
+        parser.add_argument(
+            "-c",
+            "--compiler",
+            choices=list(self._compilers.keys()) + ["all"],
+            default=next(iter(self._compilers)),
+        )
+        parser.add_argument(
+            "-b",
+            "--build-type",
+            choices=list(self._build_types) + ["all"],
+            default=next(iter(self._build_types)),
+        )
+        parser.add_argument(
+            "--profile",
+            choices=list(self._profiles) + ["all"],
+            default=next(iter(self._profiles)),
+        )
+        parser.add_argument(
+            "--instrumentation",
+            choices=list(self._instrumentations) + ["all"],
+            default=next(iter(self._instrumentations)),
+        )
+
+    def run_restart(self, *, compiler, build_type, profile, instrumentation):
+        for c, b, p, i in self._combinations(
+            compiler, build_type, profile, instrumentation
+        ):
+            self.restart_in_docker(
+                docker_image_for(c),
+                compiler=c,
+                build_type=b,
+                profile=p,
+                instrumentation=i,
+            )
+
+    def run(self, *, compiler, build_type, profile, instrumentation):
+        for c, b, p, i in self._combinations(
+            compiler, build_type, profile, instrumentation
+        ):
+            self._unittest(c, b, p, i)
+
+    def _unittest(self, compiler, build_type, profile, instrumentation):
+        compiler_info = self._compilers[compiler]
+        build_folder = self._build_folder(
+            compiler, build_type, profile, instrumentation
+        )
+        cmake = runner.CMake(
+            source_path="test/unit",
+            build_path=build_folder,
+            **{
+                k: v
+                for k, v in compiler_info.items()
+                if k in ["cxx_compiler", "toolchain"]
+            },
+            build_type=build_type.capitalize(),
+            variables={
+                "INPLACE_PROFILE": profile,
+                "INPLACE_INSTRUMENTATION": instrumentation,
+            },
+        )
+
+        runner.execute_command(cmake.generate_command())
+        runner.execute_command(cmake.build_command())
+
+        emulator = compiler_info.get("emulator", None)
+        runner.execute_command(
+            ([emulator] if emulator is not None else [])
+            + ["./inplace-library-unittest"],
+            cwd=build_folder,
+        )
+
+    def _combinations(self, compiler, build_type, profile, instrumentation):
+        compilers = self._compilers.keys() if compiler == "all" else [compiler]
+        build_types = self._build_types if build_type == "all" else [build_type]
+        profiles = self._profiles if profile == "all" else [profile]
+        instrumentations = (
+            self._instrumentations if instrumentation == "all" else [instrumentation]
+        )
+
+        return itertools.product(compilers, build_types, profiles, instrumentations)
+
+    def _build_folder(self, compiler, build_type, profile, instrumentation):
+        return f"build/test/unit/{compiler}/{build_type}/{profile}/{instrumentation}"
+
+
+class ClangTidy(runner.Action):
+    def __init__(self):
+        super().__init__(
+            self,
+            "clang-tidy",
+            help="run clang-tidy",
+            restart_support=True,
+            restart_image=docker_image_for("clang21"),
+        )
+
+    def run(self):
+        build_folder = "build/clang-tidy"
+        cmake = runner.CMake(
+            source_path="test/unit",
+            build_path=build_folder,
+            cxx_compiler="clang++-21",
+            build_type="Release",
+        )
+        clang_tidy = runner.ClangTidy(
+            executable="clang-tidy-21",
+            build_path=build_folder,
+        )
+
+        runner.execute_command(cmake.generate_command())
+
+        for file in get_cpp_files():
+            runner.execute_command(clang_tidy.check_command(files=[file]))
+
+
+class ClangFormat(runner.Action):
+    def __init__(self):
+        super().__init__(
+            self,
+            "clang-format",
+            help="run clang-format",
+            restart_support=True,
+            restart_image=docker_image_for("clang21"),
+        )
+
+    def setup_parser(self, parser):
+        parser.add_argument("--check", action="store_true")
+
+    def run(self, *, check):
+        format = runner.ClangFormat(executable="clang-format-21")
+        files = get_cpp_files()
+        command = (
+            format.check_command(files=files)
+            if check
+            else format.format_command(files=files)
+        )
+        runner.execute_command(command)
+
+
+class PythonFormat(runner.Action):
+    def __init__(self):
+        super().__init__(
+            self,
+            "python-format",
+            help="run black (python formatting)",
+            restart_support=True,
+            restart_image=docker_image_for("black"),
+        )
+
+    def setup_parser(self, parser):
+        parser.add_argument("--check", action="store_true")
+
+    def run(self, *, check):
+        runner.execute_command(
+            [
+                "black",
+                "--verbose",
+            ]
+            + (["--check"] if check else [])
+            + get_python_files()
+        )
+
+
+if __name__ == "__main__":
+    runner.run_with_actions([UnitTest, Clean, ClangTidy, ClangFormat, PythonFormat])
