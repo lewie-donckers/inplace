@@ -1,0 +1,51 @@
+name: Main workflow
+
+on:
+  push:
+    branches: "*"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unittest:
+    name: Build and run unit tests
+    strategy:
+      matrix:
+        compiler: [gcc14, clang21, clang20, gcc15-arm64, gcc15-armhf]
+        instrumentation: [none]
+        include:
+          - compiler: gcc15
+            instrumentation: all
+    uses:
+      ./.github/workflows/base.yml
+    with:
+      tag: ${{matrix.compiler}}
+      run-args: unittest --here --compiler ${{matrix.compiler}} --build-type all --profile all --instrumentation ${{matrix.instrumentation}}
+  clang-tidy:
+    name: Run clang-tidy
+    uses:
+      ./.github/workflows/base.yml
+    with:
+      tag: clang21
+      run-args: clang-tidy --here
+  clang-format:
+    name: Run clang-format
+    uses:
+      ./.github/workflows/base.yml
+    with:
+      tag: clang21
+      run-args: clang-format --here --check
+  python-format:
+    name: Run python-format
+    uses:
+      ./.github/workflows/base.yml
+    with:
+      tag: black
+      run-args: python-format --here --check
+  workflow-check:
+    name: Full workflow check
+    if: ${{always()}}
+    needs: [unittest, clang-tidy, clang-format, python-format]
+    runs-on: ubuntu-latest
+    steps:
+      - run: ${{format('[ "{0}" = "success" ]', join(needs.*.result, '" = "success" ] && [ "'))}}

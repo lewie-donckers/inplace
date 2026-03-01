@@ -1,0 +1,22 @@
+name: Workflow base
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      run-args:
+        required: true
+        type: string
+
+jobs:
+  base:
+    runs-on: ubuntu-latest
+    container:
+      image: lewiedonckers/inplace-library-build:0.1-${{inputs.tag}}
+    env:
+      PYTHONUNBUFFERED: 1
+    steps:
+      - uses: actions/checkout@v5
+      - run: ./run ${{inputs.run-args}}
