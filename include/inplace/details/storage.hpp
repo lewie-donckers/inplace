@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <new>
 
@@ -17,8 +18,7 @@ namespace inplace::details {
 template <typename T, std::size_t N>
 class alignas(T) storage {
 public:
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init, modernize-use-equals-default)
-    constexpr storage() noexcept {};
+    constexpr storage() noexcept = default;
     constexpr ~storage() = default;
 
     storage(const storage&) = delete;
@@ -27,21 +27,27 @@ public:
     storage& operator=(const storage&) = delete;
     storage& operator=(storage&&) = delete;
 
-    constexpr auto as_byte(std::size_t index) noexcept {
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-        return &data_[index * sizeof(T)];
+    template <typename... Ts>
+    constexpr T* construct_at(std::size_t index, Ts&&... args) {
+        return std::construct_at(as_type(index), std::forward<Ts>(args)...);
     }
 
-    constexpr auto as_type(std::size_t index) noexcept {
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-        return reinterpret_cast<T*>(as_byte(index));
-    }
+    constexpr void destroy_at(std::size_t index) { std::destroy_at(as_launder(index)); }
 
-    constexpr auto as_launder(std::size_t index) noexcept { return std::launder(as_type(index)); }
+    constexpr T* operator[](std::size_t index) noexcept { return as_launder(index); }
+    constexpr const T* operator[](std::size_t index) const noexcept { return as_launder(index); }
 
 private:
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays, modernize-avoid-c-arrays)
-    std::byte data_[N * sizeof(T)];
+    std::array<std::byte, N * sizeof(T)> data_;
+
+    constexpr auto as_byte(std::size_t index) noexcept { return data_.data() + (index * sizeof(T)); }
+    constexpr auto as_byte(std::size_t index) const noexcept { return data_.data() + (index * sizeof(T)); }
+
+    constexpr auto as_type(std::size_t index) noexcept { return reinterpret_cast<T*>(as_byte(index)); }
+    constexpr auto as_type(std::size_t index) const noexcept { return reinterpret_cast<const T*>(as_byte(index)); }
+
+    constexpr auto as_launder(std::size_t index) noexcept { return std::launder(as_type(index)); }
+    constexpr auto as_launder(std::size_t index) const noexcept { return std::launder(as_type(index)); }
 };
 
 }  // namespace inplace::details
