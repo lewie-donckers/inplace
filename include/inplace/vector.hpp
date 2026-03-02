@@ -10,7 +10,7 @@
 #pragma once
 
 #include <inplace/details/macros.hpp>
-#include <inplace/details/storage.hpp>
+// #include <inplace/details/storage.hpp>
 
 #include <cstddef>
 #include <initializer_list>
@@ -19,6 +19,16 @@
 
 namespace inplace {
 
+template <typename Iter>
+constexpr auto distance(Iter first, Iter last) {
+    if constexpr (std::forward_iterator<Iter>) {
+        return std::distance(first, last);
+    } else {
+        return 0;
+    }
+}
+
+// TODO constexpr support can't be done for non-trivial types. requires extra code for trivial types.
 template <typename T, std::size_t N>
 class vector {
 public:
@@ -36,23 +46,63 @@ public:
     using reverse_iterator = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-    constexpr vector() noexcept = default;
-    constexpr explicit vector(size_type count);
-    constexpr vector(size_type count, const T& value);
+    constexpr vector() noexcept {};
+
+    constexpr explicit vector(size_type count) {
+        reserve(count);
+        std::uninitialized_value_construct_n(data(), count);
+        size_ = count;
+    }
+
+    constexpr vector(size_type count, const T& value) {
+        reserve(count);
+        std::uninitialized_fill_n(data(), count, value);
+        size_ = count;
+    }
+
     template <typename InputIt>
-    constexpr vector(InputIt first, InputIt last);
+    constexpr vector(InputIt first, InputIt last) {
+        if (const auto count = distance(first, last)) {
+            reserve(count);
+            std::uninitialized_copy(first, last, data());
+            size_ = count;
+        } else {
+            while (first != last) {
+                emplace_back(*first++);
+            }
+        }
+    }
+
     // TODO requires C++23
     // template <typename R>  // TODO container-compatible-range
     // constexpr vector(std::from_range_t, R&& range);
-    constexpr vector(const vector& other);
-    constexpr vector(vector&& other) noexcept((N == 0) || std::is_nothrow_move_constructible_v<T>);
-    constexpr vector(std::initializer_list<T> init);
 
+    constexpr vector(std::initializer_list<T> init) {
+        reserve(init.size());
+        std::uninitialized_copy(init.begin(), init.end(), data());
+        size_ = init.size();
+    }
+
+    constexpr vector(const vector& other)
+        requires std::is_trivially_copy_constructible_v<T>
+    = default;
+    constexpr vector(const vector& other) noexcept(std::is_nothrow_copy_constructible_v<T>);
+
+    constexpr vector(vector&& other) noexcept
+        requires std::is_trivially_move_constructible_v<T>
+    = default;
+    constexpr vector(vector&& other) noexcept(std::is_nothrow_move_constructible_v<T>);
+
+    constexpr ~vector()
+        requires std::is_trivially_destructible_v<T>
+    = default;
     constexpr ~vector() { clear(); }
 
     constexpr vector& operator=(const vector& other);
-    constexpr vector& operator=(vector&& other) noexcept((N == 0) || (std::is_nothrow_move_assignable_v<T> &&
-                                                                      std::is_nothrow_move_constructible_v<T>));
+
+    constexpr vector& operator=(vector&& other) noexcept(std::is_nothrow_move_assignable_v<T> &&
+                                                         std::is_nothrow_move_constructible_v<T>);
+
     constexpr vector& operator=(std::initializer_list<T> init);
 
     // assign
@@ -62,46 +112,42 @@ public:
         if (pos >= size_) {
             INPLACE_THROW_OR_ABORT(std::out_of_range{"inplace::vector index out-of-range"});
         }
-        return *storage_[pos];
+        return operator[](pos);
     }
     [[nodiscard]] constexpr const_reference at(size_type pos) const {
         if (pos >= size_) {
             INPLACE_THROW_OR_ABORT(std::out_of_range{"inplace::vector index out-of-range"});
         }
-        return *storage_[pos];
+        return operator[](pos);
     }
 
-    [[nodiscard]] constexpr reference operator[](size_type pos) { return *storage_[pos]; }
-    [[nodiscard]] constexpr const_reference operator[](size_type pos) const { return *storage_[pos]; }
+    [[nodiscard]] constexpr reference operator[](size_type pos) { return *(data() + pos); }
+    [[nodiscard]] constexpr const_reference operator[](size_type pos) const { return *(data() + pos); }
 
-    [[nodiscard]] constexpr reference front() { return *storage_[0]; }
-    [[nodiscard]] constexpr const_reference front() const { return *storage_[0]; }
+    [[nodiscard]] constexpr reference front() { return *data(); }
+    [[nodiscard]] constexpr const_reference front() const { return *data(); }
 
-    [[nodiscard]] constexpr reference back() { return *storage_[size_ - 1]; }
-    [[nodiscard]] constexpr const_reference back() const { return *storage_[size_ - 1]; }
+    [[nodiscard]] constexpr reference back() { return operator[](size_ - 1); }
+    [[nodiscard]] constexpr const_reference back() const { return operator[](size_ - 1); }
 
-    [[nodiscard]] constexpr pointer data() noexcept { return storage_[0]; }
-    [[nodiscard]] constexpr const_pointer data() const noexcept { return storage_[0]; }
+    [[nodiscard]] constexpr pointer data() noexcept { return data_; }
+    [[nodiscard]] constexpr const_pointer data() const noexcept { return data_; }
 
-    [[nodiscard]] constexpr iterator begin() noexcept { return storage_[0]; }
-    [[nodiscard]] constexpr const_iterator begin() const noexcept { return storage_[0]; }
-    [[nodiscard]] constexpr const_iterator cbegin() const noexcept { return storage_[0]; }
+    [[nodiscard]] constexpr iterator begin() noexcept { return data(); }
+    [[nodiscard]] constexpr const_iterator begin() const noexcept { return data(); }
+    [[nodiscard]] constexpr const_iterator cbegin() const noexcept { return data(); }
 
-    [[nodiscard]] constexpr iterator end() noexcept { return storage_[size_]; }
-    [[nodiscard]] constexpr const_iterator end() const noexcept { return storage_[size_]; }
-    [[nodiscard]] constexpr const_iterator cend() const noexcept { return storage_[size_]; }
+    [[nodiscard]] constexpr iterator end() noexcept { return data() + size_; }
+    [[nodiscard]] constexpr const_iterator end() const noexcept { return data() + size_; }
+    [[nodiscard]] constexpr const_iterator cend() const noexcept { return data() + size_; }
 
-    [[nodiscard]] constexpr reverse_iterator rbegin() noexcept { return std::reverse_iterator{storage_[size_]}; }
-    [[nodiscard]] constexpr const_reverse_iterator rbegin() const noexcept {
-        return std::reverse_iterator{storage_[size_]};
-    }
-    [[nodiscard]] constexpr const_reverse_iterator crbegin() const noexcept {
-        return std::reverse_iterator{storage_[size_]};
-    }
+    [[nodiscard]] constexpr reverse_iterator rbegin() noexcept { return std::reverse_iterator{end()}; }
+    [[nodiscard]] constexpr const_reverse_iterator rbegin() const noexcept { return std::reverse_iterator{end()}; }
+    [[nodiscard]] constexpr const_reverse_iterator crbegin() const noexcept { return std::reverse_iterator{end()}; }
 
-    [[nodiscard]] constexpr reverse_iterator rend() noexcept { return std::reverse_iterator{storage_[0]}; }
-    [[nodiscard]] constexpr const_reverse_iterator rend() const noexcept { return std::reverse_iterator{storage_[0]}; }
-    [[nodiscard]] constexpr const_reverse_iterator crend() const noexcept { return std::reverse_iterator{storage_[0]}; }
+    [[nodiscard]] constexpr reverse_iterator rend() noexcept { return std::reverse_iterator{begin()}; }
+    [[nodiscard]] constexpr const_reverse_iterator rend() const noexcept { return std::reverse_iterator{begin()}; }
+    [[nodiscard]] constexpr const_reverse_iterator crend() const noexcept { return std::reverse_iterator{begin()}; }
 
     [[nodiscard]] constexpr bool empty() const noexcept { return size_ == 0; }
 
@@ -113,7 +159,11 @@ public:
 
     // resize
 
-    static constexpr void reserve([[maybe_unused]] size_type new_cap) {}
+    static constexpr void reserve(size_type new_cap) {
+        if (new_cap > N) {
+            INPLACE_THROW_OR_ABORT(std::bad_alloc{});
+        }
+    }
 
     static constexpr void shrink_to_fit() noexcept {}
 
@@ -139,9 +189,9 @@ public:
 
     template <typename... Ts>
     constexpr reference unchecked_emplace_back(Ts&&... args) {
-        auto& result = *storage_.construct_at(size_, std::forward<Ts>(args)...);
+        auto result = std::construct_at(data() + size_, std::forward<Ts>(args)...);
         ++size_;
-        return result;
+        return *result;
     }
 
     constexpr void push_back(const T& value) {
@@ -171,18 +221,18 @@ public:
     }
 
     constexpr reference unchecked_push_back(const T& value) {
-        auto& result = *storage_.construct_at(size_, value);
+        auto result = std::construct_at(data() + size_, value);
         ++size_;
-        return result;
+        return *result;
     }
     constexpr reference unchecked_push_back(T&& value) {
-        auto& result = *storage_.construct_at(size_, std::move(value));
+        auto result = std::construct_at(data() + size_, std::move(value));
         ++size_;
-        return result;
+        return *result;
     }
 
     constexpr void pop_back() {
-        storage_.destroy_at(size_ - 1);
+        std::destroy_at(data() + size_ - 1);
         --size_;
     }
 
@@ -190,7 +240,9 @@ public:
     // try_append_range
 
     constexpr void clear() noexcept {
-        for (auto i = std::size_t{0}; i < size_; ++i) storage_.destroy_at(i);
+        for (auto i = std::size_t{0}; i < size_; ++i) {
+            std::destroy_at(data() + i);
+        }
         size_ = 0;
     }
 
@@ -199,8 +251,13 @@ public:
 
 private:
     size_type size_{0};
-    details::storage<T, N> storage_;  // TODO storage needs to support trivial copying etc
+    union {
+        T data_[N];
+    };
 };
+
+template <typename T>
+class vector<T, 0> {};  // TODO implement specialization
 
 // operator==, etc
 // swap
