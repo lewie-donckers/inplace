@@ -7,7 +7,7 @@
 //
 // Project home: https://github.com/lewie-donckers/inplace
 
-// TODO switch to include guards instead
+// TODO switch to include guards instead?
 #pragma once
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
@@ -16,6 +16,11 @@
 #ifndef __clang__
 #define INPLACE_COMPILER_GCC true
 #endif
+#endif
+
+// TODO these are compiler specific. also support msvc?
+#ifdef __GXX_RTTI
+#define INPLACE_RTTI true
 #endif
 
 #ifdef __EXCEPTIONS
