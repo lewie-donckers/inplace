@@ -53,6 +53,7 @@ template <typename T, std::size_t N>
 constexpr bool will_fit_v = will_fit<T, N>::value;
 
 enum class operation {
+    move,
     destroy,
     get_address,
 #ifdef INPLACE_RTTI
@@ -61,7 +62,7 @@ enum class operation {
 };
 
 template <std::size_t N>
-using manage_ptr = const void* (*)(operation, const std::byte*);
+using manage_ptr = const void* (*)(operation, const std::byte*, std::byte*);
 
 template <typename T, std::size_t N>
 struct manager {
@@ -70,8 +71,14 @@ struct manager {
         return std::construct_at<T>(get_address(storage), std::forward<Args>(args)...);
     }
 
-    static const void* manage(operation op, const std::byte* storage) {
+    static const void* manage(operation op, const std::byte* storage, std::byte* arg2) {
         switch (op) {
+            case operation::move: {
+                auto* src = get_address(const_cast<std::byte*>(storage));
+                auto* dst = get_address(arg2);
+                std::construct_at<T>(dst, std::move(*src));
+                return nullptr;
+            }
             case operation::destroy: {
                 std::destroy_at(get_address(const_cast<std::byte*>(storage)));
                 return nullptr;
@@ -104,10 +111,10 @@ const void* cast(const move_only_any<N>& operand) {
         return nullptr;
     } else if ((operand.manage_ == &manager<T, N>::manage)
 #ifdef INPLACE_RTTI  // TODO shouldn't we just use RTTI when we have it?
-               || (&typeid(T) == operand.manage_(operation::get_type, nullptr))
+               || (&typeid(T) == operand.manage_(operation::get_type, nullptr, nullptr))
 #endif
     ) {
-        return operand.manage_(operation::get_address, operand.storage_);
+        return operand.manage_(operation::get_address, operand.storage_, nullptr);
     }
     return nullptr;
 }

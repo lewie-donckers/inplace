@@ -28,7 +28,12 @@ public:
 
     move_only_any(const move_only_any&) = delete;
 
-    move_only_any(move_only_any&& other) noexcept;  // TODO impl
+    move_only_any(move_only_any&& other) noexcept {
+        if (other.manage_ != nullptr) {
+            other.manage_(details::any::operation::move, other.storage_, storage_);
+            manage_ = other.manage_;
+        }
+    }
 
     template <typename ValueType>
         requires(!details::any::is_move_only_any_v<std::decay_t<ValueType>> &&
@@ -37,8 +42,8 @@ public:
                  std::is_nothrow_move_constructible_v<std::decay_t<ValueType>> &&
                  std::is_nothrow_move_assignable_v<std::decay_t<ValueType>>)
     move_only_any(ValueType&& value) {
-        details::any::manager<std::decay_t<ValueType>, N>::construct(storage_, std::forward<ValueType>(value));
-        manage_ = &details::any::manager<std::decay_t<ValueType>, N>::manage;
+        manager_t<ValueType>::construct(storage_, std::forward<ValueType>(value));
+        manage_ = &manager_t<ValueType>::manage;
     }
 
     template <typename ValueType, typename... Args>
@@ -66,8 +71,8 @@ public:
                  std::is_nothrow_move_assignable_v<std::decay_t<ValueType>>)
     move_only_any& operator=(ValueType&& other) {
         reset();
-        details::any::manager<std::decay_t<ValueType>, N>::construct(storage_, std::forward<ValueType>(other));
-        manage_ = &details::any::manager<std::decay_t<ValueType>, N>::manage;
+        manager_t<ValueType>::construct(storage_, std::forward<ValueType>(other));
+        manage_ = &manager_t<ValueType>::manage;
         return *this;
     }
 
@@ -80,8 +85,8 @@ public:
                  std::is_constructible_v<std::decay_t<ValueType>, Args...>)
     std::decay_t<ValueType>& emplace(Args&&... args) {
         reset();
-        auto* ptr = details::any::manager<std::decay_t<ValueType>, N>::construct(storage_, std::forward<Args>(args)...);
-        manage_ = &details::any::manager<std::decay_t<ValueType>, N>::manage;
+        auto* ptr = manager_t<ValueType>::construct(storage_, std::forward<Args>(args)...);
+        manage_ = &manager_t<ValueType>::manage;
         return *ptr;
     }
 
@@ -94,7 +99,7 @@ public:
 
     void reset() noexcept {
         if (manage_ != nullptr) {
-            manage_(details::any::operation::destroy, storage_);
+            manage_(details::any::operation::destroy, storage_, nullptr);
         }
     }
 
@@ -105,13 +110,16 @@ public:
 #ifdef INPLACE_RTTI
     [[nodiscard]] const std::type_info& type() const noexcept {
         if (manage_ != nullptr) {
-            return *static_cast<const std::type_info*>(manage_(details::any::operation::get_type, storage_));
+            return *static_cast<const std::type_info*>(manage_(details::any::operation::get_type, storage_, nullptr));
         }
         return typeid(void);
     }
 #endif
 
 private:
+    template <typename T>
+    using manager_t = details::any::manager<std::decay_t<T>, N>;
+
     template <typename T, std::size_t M>
     friend const void* details::any::cast(const move_only_any<M>&);
 

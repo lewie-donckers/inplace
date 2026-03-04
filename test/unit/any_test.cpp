@@ -26,4 +26,10 @@ TEST(any_test, TODO) {
 
     EXPECT_EQ(nullptr, any_cast<int>(&a));
     EXPECT_NE(nullptr, any_cast<double>(&a));
+
+    auto b = std::move(a);
+
+    EXPECT_NE(nullptr, any_cast<double>(&b));
+
+    b = std::make_unique<int>(42);
 }
