@@ -32,53 +32,10 @@ struct is_in_place_type_t<std::in_place_type_t<T>> : std::true_type {};
 template <typename T>
 constexpr bool is_in_place_type_t_v = is_in_place_type_t<T>::value;
 
-using voidf_ptr = void (*)() noexcept;
-
-class move_only_iface {
-public:
-    virtual ~move_only_iface() = default;
-
-#ifdef INPLACE_RTTI
-    [[nodiscard]] virtual const std::type_info& type() const noexcept = 0;
-#endif
-    [[nodiscard]] virtual const void* ptr() const noexcept = 0;
-    [[nodiscard]] virtual void* ptr() noexcept = 0;
-
-    virtual voidf_ptr check() const noexcept = 0;
-};
-
-template <typename T>
-class move_only : public move_only_iface {
-public:
-    template <typename... Args>
-    explicit move_only(Args&&... args) : value_{std::forward<Args>(args)...} {}
-
-    ~move_only() override = default;
-
-    move_only(const move_only&) = delete;
-    move_only(move_only&&) = delete;
-
-    move_only& operator=(const move_only&) = delete;
-    move_only& operator=(move_only&&) = delete;
-
-#ifdef INPLACE_RTTI
-    [[nodiscard]] const std::type_info& type() const noexcept override { return typeid(T); }
-#endif
-    [[nodiscard]] const void* ptr() const noexcept override { return &value_; }
-    [[nodiscard]] void* ptr() noexcept override { return &value_; }
-    voidf_ptr check() const noexcept override { return scheck; }
-    static void scheck() noexcept { ; }
-
-    [[nodiscard]] T& get() { return value_; }
-
-private:
-    T value_;
-};
-
 template <typename T, std::size_t N>
 consteval std::size_t max_align_offset_required() {
     const auto align_storage = alignof(void*);
-    const auto align_object = alignof(move_only<T>);
+    const auto align_object = alignof(T);
     static_assert(align_object > 0);
 
     return std::max(align_storage - 1, align_object) - align_object;
@@ -86,7 +43,7 @@ consteval std::size_t max_align_offset_required() {
 
 template <typename T, std::size_t N>
 consteval std::size_t max_size_required() {
-    return max_align_offset_required<T, N>() + sizeof(move_only<T>);
+    return max_align_offset_required<T, N>() + sizeof(T);
 }
 
 template <typename T, std::size_t N>
@@ -95,58 +52,65 @@ struct will_fit : std::bool_constant<max_size_required<T, N>() <= N> {};
 template <typename T, std::size_t N>
 constexpr bool will_fit_v = will_fit<T, N>::value;
 
-template <typename T, std::size_t N>
-const void* cast(const move_only_any<N>& operand) {
-    using U = std::remove_cv_t<T>;
-    if constexpr (!std::is_same_v<std::decay_t<U>, U>) {
-        return nullptr;
-    } else if ((operand.impl_->check() == &details::any::move_only<T>::scheck)
+enum class operation {
+    destroy,
+    get_address,
 #ifdef INPLACE_RTTI
-               || (typeid(T) != operand.impl_->type())
+    get_type,
 #endif
-    ) {
-        return operand.impl_->ptr();
-    }
-    return nullptr;
-}
-
-template <typename T, std::size_t N>
-void* cast(move_only_any<N>& operand) {
-    using U = std::remove_cv_t<T>;
-    if constexpr (!std::is_same_v<std::decay_t<U>, U>) {
-        return nullptr;
-    } else if ((operand.impl_->check() == &details::any::move_only<T>::scheck)
-#ifdef INPLACE_RTTI
-               || (typeid(T) == operand.impl_->type())
-#endif
-    ) {
-        return operand.impl_->ptr();
-    }
-    return nullptr;
-}
+};
 
 template <std::size_t N>
-class storage {
-public:
-    storage() = default;
+using manage_ptr = const void* (*)(operation, const std::byte*);
 
-    template <typename T, typename... Args>
-    T* construct(Args&&... args) {
-        return std::construct_at<T>(get_address<T>(), std::forward<Args>(args)...);
+template <typename T, std::size_t N>
+struct manager {
+    template <typename... Args>
+    static T* construct(std::byte* storage, Args&&... args) {
+        return std::construct_at<T>(get_address(storage), std::forward<Args>(args)...);
     }
 
-private:
-    alignas(void*) std::array<std::byte, N> data_;
+    static const void* manage(operation op, const std::byte* storage) {
+        switch (op) {
+            case operation::destroy: {
+                std::destroy_at(get_address(const_cast<std::byte*>(storage)));
+                return nullptr;
+            }
+            case operation::get_address: {
+                return get_address(const_cast<std::byte*>(storage));
+            }
+#ifdef INPLACE_RTTI
+            case operation::get_type: {
+                return &typeid(T);
+            }
+#endif
+        }
+        return nullptr;
+    }
 
-    template <typename T>
-    T* get_address() {
-        static constexpr auto align = alignof(T);
-        const auto address = std::bit_cast<std::uintptr_t>(data_.data());
+    static T* get_address(std::byte* storage) {
+        const auto align = alignof(T);
+        const auto address = std::bit_cast<std::uintptr_t>(storage);
         const auto aligned_address = ((address + align - 1) / align) * align;
 
         return std::bit_cast<T*>(aligned_address);
     }
 };
+
+template <typename T, std::size_t N>
+const void* cast(const move_only_any<N>& operand) {
+    using U = std::remove_cv_t<T>;
+    if constexpr (!std::is_same_v<std::decay_t<U>, U>) {
+        return nullptr;
+    } else if ((operand.manage_ == &manager<T, N>::manage)
+#ifdef INPLACE_RTTI  // TODO shouldn't we just use RTTI when we have it?
+               || (&typeid(T) == operand.manage_(operation::get_type, nullptr))
+#endif
+    ) {
+        return operand.manage_(operation::get_address, operand.storage_);
+    }
+    return nullptr;
+}
 
 }  // namespace details::any
 }  // namespace inplace

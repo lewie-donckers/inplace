@@ -36,18 +36,17 @@ public:
                  details::any::will_fit_v<std::decay_t<ValueType>, N> &&
                  std::is_nothrow_move_constructible_v<std::decay_t<ValueType>> &&
                  std::is_nothrow_move_assignable_v<std::decay_t<ValueType>>)
-    move_only_any(ValueType&& value)
-        : impl_{storage_.template construct<details::any::move_only<std::decay_t<ValueType>>>(
-              std::forward<ValueType>(value))} {}
+    move_only_any(ValueType&& value) {
+        details::any::manager<std::decay_t<ValueType>, N>::construct(storage_, std::forward<ValueType>(value));
+        manage_ = &details::any::manager<std::decay_t<ValueType>, N>::manage;
+    }
 
     template <typename ValueType, typename... Args>
         requires(details::any::will_fit_v<std::decay_t<ValueType>, N> &&
                  std::is_nothrow_move_constructible_v<std::decay_t<ValueType>> &&
                  std::is_nothrow_move_assignable_v<std::decay_t<ValueType>> &&
                  std::is_constructible_v<std::decay_t<ValueType>, Args...>)
-    explicit move_only_any(std::in_place_type_t<ValueType>, Args&&... args)
-        : impl_{storage_.template construct<details::any::move_only<std::decay_t<ValueType>>>(
-              std::forward<Args>(args)...)} {}
+    explicit move_only_any(std::in_place_type_t<ValueType>, Args&&... args);  // TODO impl
 
     template <typename ValueType, typename U, typename... Args>
         requires(details::any::will_fit_v<std::decay_t<ValueType>, N> &&
@@ -67,8 +66,8 @@ public:
                  std::is_nothrow_move_assignable_v<std::decay_t<ValueType>>)
     move_only_any& operator=(ValueType&& other) {
         reset();
-        impl_ = storage_.template construct<details::any::move_only<std::decay_t<ValueType>>>(
-            std::forward<ValueType>(other));
+        details::any::manager<std::decay_t<ValueType>, N>::construct(storage_, std::forward<ValueType>(other));
+        manage_ = &details::any::manager<std::decay_t<ValueType>, N>::manage;
         return *this;
     }
 
@@ -81,10 +80,9 @@ public:
                  std::is_constructible_v<std::decay_t<ValueType>, Args...>)
     std::decay_t<ValueType>& emplace(Args&&... args) {
         reset();
-        auto* ptr =
-            storage_.template construct<details::any::move_only<std::decay_t<ValueType>>>(std::forward<Args>(args)...);
-        impl_ = ptr;
-        return ptr->get();
+        auto* ptr = details::any::manager<std::decay_t<ValueType>, N>::construct(storage_, std::forward<Args>(args)...);
+        manage_ = &details::any::manager<std::decay_t<ValueType>, N>::manage;
+        return *ptr;
     }
 
     template <typename ValueType, typename U, typename... Args>
@@ -95,20 +93,19 @@ public:
     std::decay_t<ValueType>& emplace(std::initializer_list<U> il, Args&&... args);  // TODO impl
 
     void reset() noexcept {
-        if (impl_ != nullptr) {
-            impl_->~move_only_iface();
-            impl_ = nullptr;
+        if (manage_ != nullptr) {
+            manage_(details::any::operation::destroy, storage_);
         }
     }
 
     // TODO swap
 
-    [[nodiscard]] bool has_value() const noexcept { return impl_ != nullptr; }
+    [[nodiscard]] bool has_value() const noexcept { return manage_ != nullptr; }
 
 #ifdef INPLACE_RTTI
     [[nodiscard]] const std::type_info& type() const noexcept {
-        if (impl_ != nullptr) {
-            return impl_->type();
+        if (manage_ != nullptr) {
+            return *static_cast<const std::type_info*>(manage_(details::any::operation::get_type, storage_));
         }
         return typeid(void);
     }
@@ -117,11 +114,9 @@ public:
 private:
     template <typename T, std::size_t M>
     friend const void* details::any::cast(const move_only_any<M>&);
-    template <typename T, std::size_t M>
-    friend void* details::any::cast(move_only_any<M>&);
 
-    details::any::storage<N> storage_;
-    details::any::move_only_iface* impl_{nullptr};
+    alignas(void*) std::byte storage_[N];
+    details::any::manage_ptr<N> manage_{nullptr};
 };
 
 // TODO non-member swap
@@ -148,7 +143,7 @@ template <typename T, std::size_t N>
 T* any_cast(move_only_any<N>* operand) noexcept {
     static_assert(!std::is_void_v<T>);
     if ((operand != nullptr) && operand->has_value()) {
-        return static_cast<T*>(details::any::cast<T>(*operand));
+        return static_cast<T*>(const_cast<void*>(details::any::cast<T>(*operand)));
     }
     return nullptr;
 }
