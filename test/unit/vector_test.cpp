@@ -40,6 +40,7 @@ TEST(vector_test, TODO) {
     std::ignore = vec.data();
 
     auto vec2 = vector<int, 12>(12);
+    std::ignore = vec2;
 
     auto vec3 = vector<std::unique_ptr<int>, 3>{};
 
