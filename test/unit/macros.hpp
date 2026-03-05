@@ -11,8 +11,6 @@
 
 #include <inplace/details/macros.hpp>
 
-// NOLINTBEGIN(cppcoreguidelines-macro-usage)
-
 // ASSERT_THROW_OR_ABORT(statement, exception_type) will map to ASSERT_THROW when exceptions are enabled, or to
 // ASSERT_DEATH when exceptions are disabled.
 #ifdef INPLACE_EXCEPTIONS
@@ -20,5 +18,3 @@
 #else
 #define ASSERT_THROW_OR_ABORT(statement, exception_type) ASSERT_DEATH(statement, ".*")
 #endif
-
-// NOLINTEND(cppcoreguidelines-macro-usage)

@@ -9,7 +9,6 @@
 
 #pragma once
 
-// NOLINTNEXTLINE(misc-include-cleaner) false positive
 #include <inplace/details/macros.hpp>
 
 #include <bit>
@@ -26,8 +25,6 @@ struct aligned_storage {
     static constexpr auto size = S;
     static constexpr auto align = A;
 
-    // TODO use std::array instead? and can this type then be an alias?
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays, modernize-avoid-c-arrays)
     alignas(align) std::byte buffer[size];
 };
 
@@ -49,10 +46,8 @@ class i_stored_callable<R(Args...), S> {
 public:
     virtual ~i_stored_callable() = default;
 
-    // NOLINTNEXTLINE(portability-template-virtual-member-function) only used internally
     [[nodiscard]] virtual R call(Args... arguments) = 0;
 
-    // NOLINTNEXTLINE(portability-template-virtual-member-function) only used internally
     [[nodiscard]] virtual i_stored_callable* move(S& storage) noexcept = 0;
 };
 
@@ -69,7 +64,7 @@ public:
 #ifdef INPLACE_COMPILER_GCC
 #pragma GCC diagnostic push
 // Suppress false-positive warnings in GCC14/15 when using std::invoke with
-// member function pointers. Reported as:
+// member move_only_function pointers. Reported as:
 // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=111750
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif

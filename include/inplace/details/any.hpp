@@ -110,7 +110,7 @@ const void* cast(const move_only_any<N>& operand) {
     if constexpr (!std::is_same_v<std::decay_t<U>, U>) {
         return nullptr;
     } else if ((operand.manage_ == &manager<T, N>::manage)
-#ifdef INPLACE_RTTI  // TODO shouldn't we just use RTTI when we have it?
+#ifdef INPLACE_RTTI
                || (&typeid(T) == operand.manage_(operation::get_type, nullptr, nullptr))
 #endif
     ) {

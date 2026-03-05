@@ -10,7 +10,6 @@
 #pragma once
 
 #include <inplace/details/macros.hpp>
-// #include <inplace/details/storage.hpp>
 
 #include <cstddef>
 #include <initializer_list>
@@ -18,6 +17,11 @@
 #include <memory>
 
 namespace inplace {
+
+struct from_range_t {
+    explicit from_range_t() = default;
+};
+inline constexpr from_range_t from_range{};
 
 template <typename Iter>
 constexpr auto distance(Iter first, Iter last) {
@@ -28,12 +32,9 @@ constexpr auto distance(Iter first, Iter last) {
     }
 }
 
-// TODO constexpr support can't be done for non-trivial types. requires extra code for trivial types.
 template <typename T, std::size_t N>
 class vector {
 public:
-    // TODO static_assert that N < max(ptrdiff_t)?
-
     using value_type = T;
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
@@ -73,9 +74,9 @@ public:
         }
     }
 
-    // TODO requires C++23
-    // template <typename R>  // TODO container-compatible-range
-    // constexpr vector(std::from_range_t, R&& range);
+    template <typename R>
+    //  requires container-compatible-range
+    constexpr vector(from_range_t, R&& range);
 
     constexpr vector(std::initializer_list<T> init) {
         reserve(init.size());
@@ -256,8 +257,7 @@ private:
     };
 };
 
-template <typename T>
-class vector<T, 0> {};  // TODO implement specialization
+// vector<T, 0> specialization
 
 // operator==, etc
 // swap

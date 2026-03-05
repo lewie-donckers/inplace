@@ -7,10 +7,7 @@
 //
 // Project home: https://github.com/lewie-donckers/inplace
 
-// TODO switch to include guards instead?
 #pragma once
-
-// NOLINTBEGIN(cppcoreguidelines-macro-usage)
 
 #ifdef __GNUC__
 #ifndef __clang__
@@ -18,7 +15,6 @@
 #endif
 #endif
 
-// TODO these are compiler specific. also support msvc?
 #ifdef __GXX_RTTI
 #define INPLACE_RTTI true
 #endif
@@ -33,5 +29,3 @@
 #include <cstdlib>
 #define INPLACE_THROW_OR_ABORT(expr) std::abort()
 #endif
-
-// NOLINTEND(cppcoreguidelines-macro-usage)

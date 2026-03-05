@@ -11,15 +11,10 @@
 
 namespace inplace {
 
-// - standard any can have noexcept move ops because it can store the object on the heap
-// - we can only offer noexcept move if we require the target to be noexcept move
-// - options:
-//   - offer noexcept only
-//   - offer normal only
-//   - offer both
-// - is it worth it to also offer no-move-any?
-// - todo constexpr support?
-// - todo worth it to allow conversions (copyable -> move-only) (small -> large)
+class bad_any_cast : public std::bad_cast {
+public:
+    const char* what() const noexcept override { return "bad any_cast"; }
+};
 
 template <std::size_t N>
 class move_only_any {
@@ -51,18 +46,33 @@ public:
                  std::is_nothrow_move_constructible_v<std::decay_t<ValueType>> &&
                  std::is_nothrow_move_assignable_v<std::decay_t<ValueType>> &&
                  std::is_constructible_v<std::decay_t<ValueType>, Args...>)
-    explicit move_only_any(std::in_place_type_t<ValueType>, Args&&... args);  // TODO impl
+    explicit move_only_any(std::in_place_type_t<ValueType>, Args&&... args) {
+        manager_t<ValueType>::construct(storage_, std::forward<Args>(args)...);
+        manage_ = &manager_t<ValueType>::manage;
+    }
 
     template <typename ValueType, typename U, typename... Args>
         requires(details::any::will_fit_v<std::decay_t<ValueType>, N> &&
                  std::is_nothrow_move_constructible_v<std::decay_t<ValueType>> &&
                  std::is_nothrow_move_assignable_v<std::decay_t<ValueType>> &&
                  std::is_constructible_v<std::decay_t<ValueType>, std::initializer_list<U>&, Args...>)
-    explicit move_only_any(std::in_place_type_t<ValueType>, std::initializer_list<U> il, Args&&... args);  // TODO impl
+    explicit move_only_any(std::in_place_type_t<ValueType>, std::initializer_list<U> il, Args&&... args) {
+        manager_t<ValueType>::construct(storage_, il, std::forward<Args>(args)...);
+        manage_ = &manager_t<ValueType>::manage;
+    }
 
     move_only_any& operator=(const move_only_any&) = delete;
 
-    move_only_any& operator=(move_only_any&& other) noexcept;  // TODO impl
+    move_only_any& operator=(move_only_any&& other) noexcept {
+        if (this != &other) {
+            reset();
+            if (other.manage_ != nullptr) {
+                other.manage_(details::any::operation::move, other.storage_, storage_);
+                manage_ = other.manage_;
+            }
+        }
+        return *this;
+    }
 
     template <typename ValueType>
         requires(!details::any::is_move_only_any_v<std::decay_t<ValueType>> &&
@@ -95,7 +105,12 @@ public:
                  std::is_nothrow_move_constructible_v<std::decay_t<ValueType>> &&
                  std::is_nothrow_move_assignable_v<std::decay_t<ValueType>> &&
                  std::is_constructible_v<std::decay_t<ValueType>, std::initializer_list<U>&, Args...>)
-    std::decay_t<ValueType>& emplace(std::initializer_list<U> il, Args&&... args);  // TODO impl
+    std::decay_t<ValueType>& emplace(std::initializer_list<U> il, Args&&... args) {
+        reset();
+        auto* ptr = manager_t<ValueType>::construct(storage_, il, std::forward<Args>(args)...);
+        manage_ = &manager_t<ValueType>::manage;
+        return *ptr;
+    }
 
     void reset() noexcept {
         if (manage_ != nullptr) {
@@ -103,7 +118,11 @@ public:
         }
     }
 
-    // TODO swap
+    void swap(move_only_any& other) noexcept {
+        auto temp = std::move(other);
+        other = std::move(*this);
+        *this = std::move(temp);
+    }
 
     [[nodiscard]] bool has_value() const noexcept { return manage_ != nullptr; }
 
@@ -127,16 +146,43 @@ private:
     details::any::manage_ptr<N> manage_{nullptr};
 };
 
-// TODO non-member swap
+template <std::size_t N>
+void swap(move_only_any<N>& lhs, move_only_any<N>& rhs) noexcept {
+    lhs.swap(rhs);
+}
 
 template <typename T, std::size_t N>
-T any_cast(const move_only_any<N>& operand);  // TODO impl
+T any_cast(const move_only_any<N>& operand) {
+    using U = std::remove_cvref_t<T>;
+    static_assert(std::is_constructible_v<T, const U&>);
+    auto* ptr = any_cast<U>(&operand);
+    if (!ptr) {
+        INPLACE_THROW_OR_ABORT(bad_any_cast{});
+    }
+    return static_cast<T>(*ptr);
+}
 
 template <typename T, std::size_t N>
-T any_cast(move_only_any<N>& operand);  // TODO impl
+T any_cast(move_only_any<N>& operand) {
+    using U = std::remove_cvref_t<T>;
+    static_assert(std::is_constructible_v<T, U&>);
+    auto* ptr = any_cast<U>(&operand);
+    if (!ptr) {
+        INPLACE_THROW_OR_ABORT(bad_any_cast{});
+    }
+    return static_cast<T>(*ptr);
+}
 
 template <typename T, std::size_t N>
-T any_cast(move_only_any<N>&& operand);  // TODO impl
+T any_cast(move_only_any<N>&& operand) {
+    using U = std::remove_cvref_t<T>;
+    static_assert(std::is_constructible_v<T, U>);
+    auto* ptr = any_cast<U>(&operand);
+    if (!ptr) {
+        INPLACE_THROW_OR_ABORT(bad_any_cast{});
+    }
+    return static_cast<T>(std::move(*ptr));
+}
 
 template <typename T, std::size_t N>
 const T* any_cast(const move_only_any<N>* operand) noexcept {
@@ -156,12 +202,18 @@ T* any_cast(move_only_any<N>* operand) noexcept {
     return nullptr;
 }
 
-// TODO make_any
+template <typename T, std::size_t N, typename... Args>
+move_only_any<N> make_move_only_any(Args&&... args) {
+    return move_only_any<N>{std::in_place_type<T>, std::forward<Args>(args)...};
+}
 
-// TODO bad_any_cast
+template <typename T, std::size_t N, typename U, typename... Args>
+move_only_any<N> make_move_only_any(std::initializer_list<U> il, Args&&... args) {
+    return move_only_any<N>{std::in_place_type<T>, il, std::forward<Args>(args)...};
+}
 
 template <std::size_t N>
-class copyable_any {};
+class copyable_any;
 
 template <std::size_t N>
 using any = copyable_any<N>;

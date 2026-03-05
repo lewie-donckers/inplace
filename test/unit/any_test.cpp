@@ -13,7 +13,7 @@
 
 using inplace::move_only_any;
 
-TEST(any_test, TODO) {
+TEST(move_only_any_test, TODO) {
     auto a = move_only_any<16>{13};
 
     a = 42;

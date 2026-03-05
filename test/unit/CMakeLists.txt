@@ -18,9 +18,6 @@ set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CXX_STANDARD 20 CXX_STAND
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -Wold-style-cast -Wshadow -Wconversion -Werror)
 
 
-
-# TODO
-
 if (NOT DEFINED INPLACE_INSTRUMENTATION OR INPLACE_INSTRUMENTATION STREQUAL "none")
     # Do nothing.
 elseif (${INPLACE_INSTRUMENTATION} STREQUAL "coverage")

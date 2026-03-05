@@ -40,30 +40,8 @@ TEST(vector_test, TODO) {
     std::ignore = vec.data();
 
     auto vec2 = vector<int, 12>(12);
+
+    auto vec3 = vector<std::unique_ptr<int>, 3>{};
+
+    vec3.push_back(std::make_unique<int>(42));
 }
-
-TEST(vector_test, TODO2) {
-    auto vec = vector<std::unique_ptr<int>, 3>{};
-
-    vec.push_back(std::make_unique<int>(42));
-}
-
-class MyType {
-public:
-    constexpr MyType() {}
-    constexpr ~MyType() {}
-
-    constexpr MyType(const MyType&) {};
-    constexpr MyType(MyType&&) {};
-
-    constexpr MyType& operator=(const MyType&) { return *this; };
-    constexpr MyType& operator=(MyType&&) { return *this; };
-};
-
-static_assert(!std::is_trivial_v<MyType>);
-static_assert(!std::is_trivially_constructible_v<MyType>);
-static_assert(!std::is_trivially_destructible_v<MyType>);
-static_assert(!std::is_trivially_copy_constructible_v<MyType>);
-static_assert(!std::is_trivially_move_constructible_v<MyType>);
-static_assert(!std::is_trivially_copy_assignable_v<MyType>);
-static_assert(!std::is_trivially_move_assignable_v<MyType>);
