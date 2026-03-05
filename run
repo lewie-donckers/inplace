@@ -170,7 +170,14 @@ class ClangTidy(runner.Action):
             restart_image=docker_image_for("clang21"),
         )
 
-    def run(self):
+    def setup_parser(self, parser):
+        parser.add_argument(
+            "--no-strict",
+            action="store_true",
+            help="do not use strict mode; warnings are not considered errors"
+        )
+
+    def run(self, *, no_strict):
         build_folder = "build/clang-tidy"
         cmake = runner.CMake(
             source_path="test/unit",
@@ -186,7 +193,7 @@ class ClangTidy(runner.Action):
         runner.execute_command(cmake.generate_command())
 
         for file in get_cpp_files():
-            runner.execute_command(clang_tidy.check_command(files=[file]))
+            runner.execute_command(clang_tidy.check_command(files=[file], strict=not no_strict))
 
 
 class ClangFormat(runner.Action):

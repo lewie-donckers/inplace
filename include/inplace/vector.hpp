@@ -10,6 +10,7 @@
 #pragma once
 
 #include <inplace/details/macros.hpp>
+#include <inplace/details/vector.hpp>
 
 #include <cstddef>
 #include <initializer_list>
@@ -21,16 +22,8 @@ namespace inplace {
 struct from_range_t {
     explicit from_range_t() = default;
 };
-inline constexpr from_range_t from_range{};
 
-template <typename Iter>
-constexpr auto distance(Iter first, Iter last) {
-    if constexpr (std::forward_iterator<Iter>) {
-        return std::distance(first, last);
-    } else {
-        return 0;
-    }
-}
+inline constexpr from_range_t from_range{};
 
 template <typename T, std::size_t N>
 class vector {
@@ -63,7 +56,7 @@ public:
 
     template <typename InputIt>
     constexpr vector(InputIt first, InputIt last) {
-        if (const auto count = distance(first, last)) {
+        if (const auto count = details::vector::distance(first, last)) {
             reserve(count);
             std::uninitialized_copy(first, last, data());
             size_ = count;
@@ -106,7 +99,13 @@ public:
 
     constexpr vector& operator=(std::initializer_list<T> init);
 
-    // assign
+    constexpr void assign(size_type count, const T& value);
+
+    template <typename InputIt>
+    constexpr void assign(InputIt first, InputIt last);
+
+    constexpr void assign(std::initializer_list<T> ilist);
+
     // assign_range
 
     [[nodiscard]] constexpr reference at(size_type pos) {

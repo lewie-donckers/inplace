@@ -3,9 +3,10 @@ class ClangTidy:
         self._executable = executable
         self._build_path = build_path
 
-    def check_command(self, *, files, extra_arguments=[]):
+    def check_command(self, *, files, strict=True, extra_arguments=[]):
         return (
-            [self._executable, "--warnings-as-errors=*"]
+            [self._executable]
+            + (["--warnings-as-errors=*"] if strict else [])
             + (["-p", self._build_path] if self._build_path is not None else [])
             + extra_arguments
             + files

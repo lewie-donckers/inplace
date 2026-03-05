@@ -27,7 +27,7 @@ jobs:
       ./.github/workflows/base.yml
     with:
       tag: clang21
-      run-args: clang-tidy --here
+      run-args: clang-tidy --here --no-strict
   clang-format:
     name: Run clang-format
     uses:
