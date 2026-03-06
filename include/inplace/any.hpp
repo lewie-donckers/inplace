@@ -152,7 +152,7 @@ private:
     friend const void* details::any::cast(const move_only_any<M>&);
 
     alignas(void*) std::byte storage_[N];
-    details::any::manage_ptr<N> manage_{nullptr};
+    details::any::manage_ptr manage_{nullptr};
 };
 
 template <std::size_t N>

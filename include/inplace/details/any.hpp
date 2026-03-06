@@ -70,7 +70,6 @@ enum class operation {
 #endif
 };
 
-template <std::size_t N>
 using manage_ptr = const void* (*)(operation, const std::byte*, std::byte*);
 
 template <typename T, std::size_t N>

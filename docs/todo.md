@@ -25,8 +25,10 @@
 | functional | -                                 | document                                                                    |
 | functional | -                                 | test                                                                        |
 | functional | copyable_function                 | implement                                                                   |
-| functional | function                          | map to copyable_function                                                    |
-| functional | move_only_function                | refactor implementation (like any)                                          |
+| functional | function::function(function&&)    | fix for throwing moves                                                      |
+| functional | function::operator=(function&&)   | fix for throwing moves                                                      |
+| functional | function::swap                    | optimize                                                                    |
+| functional | move_only_function                | implement                                                                   |
 | hive       | -                                 | everything                                                                  |
 | map        | -                                 | everything                                                                  |
 | set        | -                                 | everything                                                                  |
