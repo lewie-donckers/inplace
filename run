@@ -174,7 +174,7 @@ class ClangTidy(runner.Action):
         parser.add_argument(
             "--no-strict",
             action="store_true",
-            help="do not use strict mode; warnings are not considered errors"
+            help="do not use strict mode; warnings are not considered errors",
         )
 
     def run(self, *, no_strict):
@@ -193,7 +193,9 @@ class ClangTidy(runner.Action):
         runner.execute_command(cmake.generate_command())
 
         for file in get_cpp_files():
-            runner.execute_command(clang_tidy.check_command(files=[file], strict=not no_strict))
+            runner.execute_command(
+                clang_tidy.check_command(files=[file], strict=not no_strict)
+            )
 
 
 class ClangFormat(runner.Action):
