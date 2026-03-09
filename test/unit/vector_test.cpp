@@ -46,3 +46,25 @@ TEST(vector_test, TODO) {
 
     vec3.push_back(std::make_unique<int>(42));
 }
+
+TEST(vector_test, TODO2) {
+    auto v1 = vector<int, 16>{};
+    auto v2 = v1;
+    auto v3 = std::move(v2);
+}
+
+class NonTrivial {
+public:
+    NonTrivial() {}
+    ~NonTrivial() {}
+    NonTrivial(const NonTrivial&) {}
+    NonTrivial(NonTrivial&&) noexcept {}
+    NonTrivial& operator=(const NonTrivial&) { return *this; }
+    NonTrivial& operator=(NonTrivial&&) { return *this; }
+};
+
+TEST(vector_test, TODO3) {
+    auto v1 = vector<NonTrivial, 16>{};
+    auto v2 = v1;
+    auto v3 = std::move(v2);
+}

@@ -63,7 +63,7 @@ public:
     function& operator=(const function& other) {
         if (this != &other) {
             destroy();
-            if (other.manage_ != nullptr) {
+            if (other.has_value()) {
                 other.manage_(details::functional::operation::copy, other.storage_, storage_);
                 manage_ = other.manage_;
             }
@@ -74,7 +74,7 @@ public:
     function& operator=(function&& other) noexcept {
         if (this != &other) {
             destroy();
-            if (other.manage_ != nullptr) {
+            if (other.has_value()) {
                 other.manage_(details::functional::operation::move, other.storage_, storage_);
                 manage_ = other.manage_;
             }
@@ -99,10 +99,10 @@ public:
         return *this;
     }
 
-    explicit operator bool() const noexcept { return manage_ != nullptr; }
+    explicit operator bool() const noexcept { return has_value(); }
 
     R operator()(Args... arguments) const {
-        if (manage_ == nullptr) {
+        if (!has_value()) {
             INPLACE_THROW_OR_ABORT(bad_function_call{});
         }
         auto ptr = manage_(details::functional::operation::get_function_ptr, storage_, nullptr);
@@ -123,11 +123,15 @@ private:
     template <typename T>
     using manager_t = details::functional::manager<std::decay_t<T>, S, R, Args...>;
 
-    alignas(void*) std::byte storage_[S];
+    union {
+        alignas(void*) std::byte storage_[S];
+    };
     details::functional::manage_ptr<R, Args...> manage_{nullptr};
 
+    [[nodiscard]] bool has_value() const noexcept { return manage_ != nullptr; }
+
     void destroy() noexcept {
-        if (manage_ != nullptr) {
+        if (has_value()) {
             manage_(details::functional::operation::destroy, storage_, nullptr);
             manage_ = nullptr;
         }

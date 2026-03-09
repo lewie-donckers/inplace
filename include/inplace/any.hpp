@@ -151,7 +151,9 @@ private:
     template <typename T, std::size_t M>
     friend const void* details::any::cast(const move_only_any<M>&);
 
-    alignas(void*) std::byte storage_[N];
+    union {
+        alignas(void*) std::byte storage_[N];
+    };
     details::any::manage_ptr manage_{nullptr};
 };
 

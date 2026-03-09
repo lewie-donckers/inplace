@@ -10,7 +10,8 @@
 #pragma once
 
 #include <inplace/details/macros.hpp>
-#include <inplace/details/vector.hpp>
+#include <inplace/details/utilities.hpp>
+#include <inplace/ranges.hpp>
 
 #include <cstddef>
 #include <initializer_list>
@@ -18,12 +19,6 @@
 #include <memory>
 
 namespace inplace {
-
-struct from_range_t {
-    explicit from_range_t() = default;
-};
-
-inline constexpr from_range_t from_range{};
 
 template <typename T, std::size_t N>
 class vector {
@@ -45,21 +40,21 @@ public:
     constexpr explicit vector(size_type count) {
         reserve(count);
         std::uninitialized_value_construct_n(data(), count);
-        size_ = count;
+        set_size(count);
     }
 
     constexpr vector(size_type count, const T& value) {
         reserve(count);
         std::uninitialized_fill_n(data(), count, value);
-        size_ = count;
+        set_size(count);
     }
 
     template <typename InputIt>
     constexpr vector(InputIt first, InputIt last) {
-        if (const auto count = details::vector::distance(first, last)) {
+        if (const auto count = details::distance(first, last)) {
             reserve(count);
             std::uninitialized_copy(first, last, data());
-            size_ = count;
+            set_size(count);
         } else {
             while (first != last) {
                 emplace_back(*first++);
@@ -67,37 +62,55 @@ public:
         }
     }
 
-    template <typename R>
-    //  requires container-compatible-range
+    template <details::container_compatible_range<T> R>
     constexpr vector(from_range_t, R&& range);
 
     constexpr vector(std::initializer_list<T> init) {
         reserve(init.size());
         std::uninitialized_copy(init.begin(), init.end(), data());
-        size_ = init.size();
+        set_size(init.size());
     }
 
     constexpr vector(const vector& other)
         requires std::is_trivially_copy_constructible_v<T>
     = default;
-    constexpr vector(const vector& other) noexcept(std::is_nothrow_copy_constructible_v<T>);
+    constexpr vector(const vector& other) noexcept(std::is_nothrow_copy_constructible_v<T>) {
+        std::uninitialized_copy(other.begin(), other.end(), data());
+        set_size(other.size());
+    }
 
     constexpr vector(vector&& other) noexcept
         requires std::is_trivially_move_constructible_v<T>
     = default;
-    constexpr vector(vector&& other) noexcept(std::is_nothrow_move_constructible_v<T>);
+    constexpr vector(vector&& other) noexcept(std::is_nothrow_move_constructible_v<T>) {
+        std::uninitialized_move(other.begin(), other.end(), data());
+        set_size(other.size());
+    }
 
     constexpr ~vector()
         requires std::is_trivially_destructible_v<T>
     = default;
     constexpr ~vector() { clear(); }
 
-    constexpr vector& operator=(const vector& other);
+    constexpr vector& operator=(const vector& other) {
+        if (this != &other) {
+            assign(other.begin(), other.end());
+        }
+        return *this;
+    }
 
     constexpr vector& operator=(vector&& other) noexcept(std::is_nothrow_move_assignable_v<T> &&
-                                                         std::is_nothrow_move_constructible_v<T>);
+                                                         std::is_nothrow_move_constructible_v<T>) {
+        if (this != &other) {
+            assign(std::make_move_iterator(other.begin()), std::make_move_iterator(other.end()));
+        }
+        return *this;
+    }
 
-    constexpr vector& operator=(std::initializer_list<T> init);
+    constexpr vector& operator=(std::initializer_list<T> init) {
+        reserve(init.size());
+        assign(init.begin(), init.end());
+    }
 
     constexpr void assign(size_type count, const T& value);
 
@@ -106,7 +119,8 @@ public:
 
     constexpr void assign(std::initializer_list<T> ilist);
 
-    // assign_range
+    template <details::container_compatible_range<T> R>
+    constexpr void assign_range(R&& rg);
 
     [[nodiscard]] constexpr reference at(size_type pos) {
         if (pos >= size_) {
@@ -157,7 +171,9 @@ public:
 
     [[nodiscard]] static constexpr size_type capacity() noexcept { return N; }
 
-    // resize
+    constexpr void resize(size_type count);
+
+    constexpr void resize(size_type count, const value_type& value);
 
     static constexpr void reserve(size_type new_cap) {
         if (new_cap > N) {
@@ -167,9 +183,22 @@ public:
 
     static constexpr void shrink_to_fit() noexcept {}
 
-    // insert
-    // insert_range
-    // emplace
+    constexpr iterator insert(const_iterator pos, const T& value);
+
+    constexpr iterator insert(const_iterator pos, T&& value);
+
+    constexpr iterator insert(const_iterator pos, size_type count, const T& value);
+
+    template <class InputIt>
+    constexpr iterator insert(const_iterator pos, InputIt first, InputIt last);
+
+    constexpr iterator insert(const_iterator pos, std::initializer_list<T> ilist);
+
+    template <details::container_compatible_range<T> R>
+    constexpr iterator insert_range(const_iterator pos, R&& rg);
+
+    template <class... Args>
+    constexpr iterator emplace(const_iterator position, Args&&... args);
 
     template <typename... Ts>
     constexpr reference emplace_back(Ts&&... args) {
@@ -236,27 +265,37 @@ public:
         --size_;
     }
 
-    // append_range
-    // try_append_range
+    template <details::container_compatible_range<T> R>
+    constexpr void append_range(R&& rg);
+
+    template <details::container_compatible_range<T> R>
+    constexpr std::ranges::borrowed_iterator_t<R> try_append_range(R&& rg);
 
     constexpr void clear() noexcept {
         for (auto i = std::size_t{0}; i < size_; ++i) {
             std::destroy_at(data() + i);
         }
-        size_ = 0;
+        set_size(0);
     }
 
-    // erase
-    // swap
+    constexpr iterator erase(const_iterator pos);
+
+    constexpr iterator erase(const_iterator first, const_iterator last);
+
+    constexpr void swap(vector& other) noexcept(std::is_nothrow_swappable_v<T> &&
+                                                std::is_nothrow_move_constructible_v<T>);
 
 private:
-    size_type size_{0};
+    details::optimal_size_type_t<N, alignof(T)> size_{0};
     union {
         T data_[N];
     };
+
+    constexpr void set_size(std::size_t size) noexcept { size_ = static_cast<decltype(size_)>(size); }
 };
 
-// vector<T, 0> specialization
+template <typename T>
+class vector<T, 0>;
 
 // operator==, etc
 // swap

@@ -74,10 +74,13 @@ struct manager {
                 return nullptr;
             }
             case operation::move: {
-                // TODO use copy if T is not nothrow_move_constructible
                 auto* src = get_address(const_cast<std::byte*>(arg1));
                 auto* dst = get_address(arg2);
-                std::construct_at<T>(dst, std::move(*src));
+                if constexpr (std::is_nothrow_move_constructible_v<T>) {
+                    std::construct_at<T>(dst, std::move(*src));
+                } else {
+                    std::construct_at<T>(dst, *src);
+                }
                 return nullptr;
             }
             case operation::destroy: {
