@@ -30,25 +30,45 @@
 | hive       | -                                 | everything                                                                                               |
 | map        | -                                 | everything                                                                                               |
 | set        | -                                 | everything                                                                                               |
-| string     | -                                 | everything                                                                                               |
 | string     | -                                 | check if there is an N where only copying size_ chars is faster than default memcpy of the entire object |
+| string     | -                                 | consider adding try_* alternatives just like std::inplace_vector has                                     |
+| string     | -                                 | document                                                                                                 |
+| string     | -                                 | test                                                                                                     |
+| string     | erase                             | implement                                                                                                |
+| string     | erase_if                          | implement                                                                                                |
+| string     | operator+                         | implement                                                                                                |
+| string     | operator<=>                       | implement                                                                                                |
+| string     | operator==                        | implement                                                                                                |
+| string     | string::append                    | implement                                                                                                |
+| string     | string::append_range              | implement                                                                                                |
+| string     | string::append_range              | implement                                                                                                |
+| string     | string::compare                   | implement                                                                                                |
+| string     | string::copy                      | implement                                                                                                |
+| string     | string::erase                     | implement                                                                                                |
+| string     | string::insert                    | implement                                                                                                |
+| string     | string::insert_range              | implement                                                                                                |
+| string     | string::operator+=                | implement                                                                                                |
+| string     | string::replace                   | implement                                                                                                |
+| string     | string::replace_with_range        | implement                                                                                                |
+| string     | string::resize                    | implement                                                                                                |
+| string     | string::resize_and_overwrite      | implement                                                                                                |
+| string     | swap                              | implement                                                                                                |
 | vector     | -                                 | document                                                                                                 |
 | vector     | -                                 | test                                                                                                     |
-| vector     | vector::vector(from_range_t, R&&) | implement                                                                                                |
-| vector     | vector::assign                    | implement                                                                                                |
-| vector     | vector::assign_range              | implement                                                                                                |
-| vector     | vector::resize                    | implement                                                                                                |
-| vector     | vector::insert                    | implement                                                                                                |
-| vector     | vector::insert_range              | implement                                                                                                |
-| vector     | vector::emplace                   | implement                                                                                                |
-| vector     | vector::append_range              | implement                                                                                                |
-| vector     | vector::try_append_range          | implement                                                                                                |
-| vector     | vector::erase                     | implement                                                                                                |
-| vector     | vector::swap                      | implement                                                                                                |
-| vector     | deduction guides                  | implement                                                                                                |
 | vector     | comparison operators              | implement                                                                                                |
-| vector     | swap                              | implement                                                                                                |
+| vector     | deduction guides                  | implement                                                                                                |
 | vector     | erase                             | implement                                                                                                |
 | vector     | erase_if                          | implement                                                                                                |
+| vector     | swap                              | implement                                                                                                |
+| vector     | vector::append_range              | implement                                                                                                |
+| vector     | vector::assign                    | implement                                                                                                |
+| vector     | vector::assign_range              | implement                                                                                                |
+| vector     | vector::emplace                   | implement                                                                                                |
+| vector     | vector::erase                     | implement                                                                                                |
+| vector     | vector::insert                    | implement                                                                                                |
+| vector     | vector::insert_range              | implement                                                                                                |
+| vector     | vector::resize                    | implement                                                                                                |
+| vector     | vector::swap                      | implement                                                                                                |
+| vector     | vector::try_append_range          | implement                                                                                                |
+| vector     | vector::vector(from_range_t, R&&) | implement                                                                                                |
 | vector     | vector<T, 0>                      | implement specialization                                                                                 |
-|            |                                   |                                                                                                          |

@@ -133,7 +133,14 @@ public:
         return *this;
     }
 
-    constexpr basic_string& assign(const C* s) { return assign(s, details::strlen(s)); }
+    constexpr basic_string& assign(const C* s) {
+        clear();
+        while (*s != terminator) {
+            push_back(*s);
+            ++s;
+        }
+        return *this;
+    }
 
     template <details::string_view_like<C> V>
     constexpr basic_string& assign(const V& v) {
@@ -175,28 +182,28 @@ public:
 
     [[nodiscard]] constexpr C& at(size_type pos) {
         if (pos >= size_) {
-            INPLACE_THROW_OR_ABORT(std::out_of_range{"inplace::basic_string position out-of-range"});
+            INPLACE_THROW_OR_ABORT(std::out_of_range{"inplace::basic_string index out-of-range"});
         }
         return data_[pos];
     }
 
     [[nodiscard]] constexpr const C& at(size_type pos) const {
         if (pos >= size_) {
-            INPLACE_THROW_OR_ABORT(std::out_of_range{"inplace::basic_string position out-of-range"});
+            INPLACE_THROW_OR_ABORT(std::out_of_range{"inplace::basic_string index out-of-range"});
         }
         return data_[pos];
     }
 
     [[nodiscard]] constexpr C& operator[](size_type pos) {
         if (pos > size_) {
-            INPLACE_THROW_OR_ABORT(std::out_of_range{"inplace::basic_string position out-of-range"});
+            INPLACE_THROW_OR_ABORT(std::out_of_range{"inplace::basic_string index out-of-range"});
         }
         return data_[pos];
     }
 
     [[nodiscard]] constexpr const C& operator[](size_type pos) const {
         if (pos > size_) {
-            INPLACE_THROW_OR_ABORT(std::out_of_range{"inplace::basic_string position out-of-range"});
+            INPLACE_THROW_OR_ABORT(std::out_of_range{"inplace::basic_string index out-of-range"});
         }
         return data_[pos];
     }
@@ -209,13 +216,13 @@ public:
 
     [[nodiscard]] constexpr const C& back() const { return operator[](size_ - 1); }
 
-    [[nodiscard]] C* data() noexcept { return data_; }
+    [[nodiscard]] constexpr C* data() noexcept { return data_; }
 
-    [[nodiscard]] const char* data() const noexcept { return data_; }
+    [[nodiscard]] constexpr const char* data() const noexcept { return data_; }
 
-    [[nodiscard]] const char* c_str() const noexcept { return data_; }
+    [[nodiscard]] constexpr const char* c_str() const noexcept { return data_; }
 
-    [[nodiscard]] constexpr operator std::basic_string_view<C>() const noexcept { return {data_, size_}; }
+    [[nodiscard]] constexpr operator std::basic_string_view<C>() const noexcept { return as_string_view(); }
 
     [[nodiscard]] constexpr iterator begin() noexcept { return data_; }
 
@@ -264,7 +271,12 @@ public:
     // insert
     // insert_range
     // erase
-    // push_back
+
+    constexpr void push_back(C ch) {
+        reserve(size_ + 1);
+        data_[size_] = ch;
+        set_size_and_terminate(size_ + 1);
+    }
 
     constexpr void pop_back() noexcept { set_size_and_terminate(size_ - 1); }
 
@@ -283,17 +295,174 @@ public:
         *this = std::move(temp);
     }
 
-    // find
-    // rfind
-    // find_first_of
-    // find_first_not_of
-    // find_last_of
-    // find_last_not_of
+    [[nodiscard]] constexpr size_type find(const basic_string& str, size_type pos = 0) const noexcept {
+        return as_string_view().find(str.as_string_view(), pos);
+    }
+
+    [[nodiscard]] constexpr size_type find(const C* s, size_type pos, size_type count) const noexcept {
+        return as_string_view().find(s, pos, count);
+    }
+
+    [[nodiscard]] constexpr size_type find(const C* s, size_type pos = 0) const noexcept {
+        return as_string_view().find(s, pos);
+    }
+
+    [[nodiscard]] constexpr size_type find(C ch, size_type pos = 0) const noexcept {
+        return as_string_view().find(ch, pos);
+    }
+
+    template <details::string_view_like<C> V>
+    [[nodiscard]] constexpr size_type find(const V& v, size_type pos = 0) const
+        noexcept(std::is_nothrow_convertible_v<const V&, std::basic_string_view<C>>) {
+        const auto as_view = std::basic_string_view<C>{v};
+        return as_string_view().find(as_view, pos);
+    }
+
+    [[nodiscard]] constexpr size_type rfind(const basic_string& str, size_type pos = npos) const noexcept {
+        return as_string_view().rfind(str.as_string_view(), pos);
+    }
+
+    [[nodiscard]] constexpr size_type rfind(const C* s, size_type pos, size_type count) const noexcept {
+        return as_string_view().rfind(s, pos, count);
+    }
+
+    [[nodiscard]] constexpr size_type rfind(const C* s, size_type pos = npos) const noexcept {
+        return as_string_view().rfind(s, pos);
+    }
+
+    [[nodiscard]] constexpr size_type rfind(C ch, size_type pos = npos) const noexcept {
+        return as_string_view().rfind(ch, pos);
+    }
+
+    template <details::string_view_like<C> V>
+    [[nodiscard]] constexpr size_type rfind(const V& v, size_type pos = npos) const
+        noexcept(std::is_nothrow_convertible_v<const V&, std::basic_string_view<C>>) {
+        const auto as_view = std::basic_string_view<C>{v};
+        return as_string_view().rfind(as_view, pos);
+    }
+
+    [[nodiscard]] constexpr size_type find_first_of(const basic_string& str, size_type pos = 0) const noexcept {
+        return as_string_view().find_first_of(str.as_string_view(), pos);
+    }
+
+    [[nodiscard]] constexpr size_type find_first_of(const C* s, size_type pos, size_type count) const noexcept {
+        return as_string_view().find_first_of(s, pos, count);
+    }
+
+    [[nodiscard]] constexpr size_type find_first_of(const C* s, size_type pos = 0) const noexcept {
+        return as_string_view().find_first_of(s, pos);
+    }
+
+    [[nodiscard]] constexpr size_type find_first_of(C ch, size_type pos = 0) const noexcept {
+        return as_string_view().find_first_of(ch, pos);
+    }
+
+    template <details::string_view_like<C> V>
+    [[nodiscard]] constexpr size_type find_first_of(const V& v, size_type pos = 0) const
+        noexcept(std::is_nothrow_convertible_v<const V&, std::basic_string_view<C>>) {
+        const auto as_view = std::basic_string_view<C>{v};
+        return as_string_view().find_first_of(as_view, pos);
+    }
+
+    [[nodiscard]] constexpr size_type find_first_not_of(const basic_string& str, size_type pos = 0) const noexcept {
+        return as_string_view().find_first_not_of(str.as_string_view(), pos);
+    }
+
+    [[nodiscard]] constexpr size_type find_first_not_of(const C* s, size_type pos, size_type count) const noexcept {
+        return as_string_view().find_first_not_of(s, pos, count);
+    }
+
+    [[nodiscard]] constexpr size_type find_first_not_of(const C* s, size_type pos = 0) const noexcept {
+        return as_string_view().find_first_not_of(s, pos);
+    }
+
+    [[nodiscard]] constexpr size_type find_first_not_of(C ch, size_type pos = 0) const noexcept {
+        return as_string_view().find_first_not_of(ch, pos);
+    }
+
+    template <details::string_view_like<C> V>
+    [[nodiscard]] constexpr size_type find_first_not_of(const V& v, size_type pos = 0) const
+        noexcept(std::is_nothrow_convertible_v<const V&, std::basic_string_view<C>>) {
+        const auto as_view = std::basic_string_view<C>{v};
+        return as_string_view().find_first_not_of(as_view, pos);
+    }
+
+    [[nodiscard]] constexpr size_type find_last_of(const basic_string& str, size_type pos = npos) const noexcept {
+        return as_string_view().find_last_of(str.as_string_view(), pos);
+    }
+
+    [[nodiscard]] constexpr size_type find_last_of(const C* s, size_type pos, size_type count) const noexcept {
+        return as_string_view().find_last_of(s, pos, count);
+    }
+
+    [[nodiscard]] constexpr size_type find_last_of(const C* s, size_type pos = npos) const noexcept {
+        return as_string_view().find_last_of(s, pos);
+    }
+
+    [[nodiscard]] constexpr size_type find_last_of(C ch, size_type pos = npos) const noexcept {
+        return as_string_view().find_last_of(ch, pos);
+    }
+
+    template <details::string_view_like<C> V>
+    [[nodiscard]] constexpr size_type find_last_of(const V& v, size_type pos = npos) const
+        noexcept(std::is_nothrow_convertible_v<const V&, std::basic_string_view<C>>) {
+        const auto as_view = std::basic_string_view<C>{v};
+        return as_string_view().find_last_of(as_view, pos);
+    }
+
+    [[nodiscard]] constexpr size_type find_last_not_of(const basic_string& str, size_type pos = npos) const noexcept {
+        return as_string_view().find_last_not_of(str.as_string_view(), pos);
+    }
+
+    [[nodiscard]] constexpr size_type find_last_not_of(const C* s, size_type pos, size_type count) const noexcept {
+        return as_string_view().find_last_not_of(s, pos, count);
+    }
+
+    [[nodiscard]] constexpr size_type find_last_not_of(const C* s, size_type pos = npos) const noexcept {
+        return as_string_view().find_last_not_of(s, pos);
+    }
+
+    [[nodiscard]] constexpr size_type find_last_not_of(C ch, size_type pos = npos) const noexcept {
+        return as_string_view().find_last_not_of(ch, pos);
+    }
+
+    template <details::string_view_like<C> V>
+    [[nodiscard]] constexpr size_type find_last_not_of(const V& v, size_type pos = npos) const
+        noexcept(std::is_nothrow_convertible_v<const V&, std::basic_string_view<C>>) {
+        const auto as_view = std::basic_string_view<C>{v};
+        return as_string_view().find_last_not_of(as_view, pos);
+    }
+
     // compare
-    // starts_with
-    // ends_with
-    // contains
-    // substr
+
+    [[nodiscard]] constexpr bool starts_with(std::basic_string_view<C> sv) const noexcept {
+        return as_string_view().starts_with(sv);
+    }
+
+    [[nodiscard]] constexpr bool starts_with(C ch) const noexcept { return as_string_view().starts_with(ch); }
+
+    [[nodiscard]] constexpr bool starts_with(const C* s) const noexcept { return as_string_view().starts_with(s); }
+
+    [[nodiscard]] constexpr bool ends_with(std::basic_string_view<C> sv) const noexcept {
+        return as_string_view().ends_with(sv);
+    }
+
+    [[nodiscard]] constexpr bool ends_with(C ch) const noexcept { return as_string_view().ends_with(ch); }
+
+    [[nodiscard]] constexpr bool ends_with(const C* s) const noexcept { return as_string_view().ends_with(s); }
+
+    [[nodiscard]] constexpr bool contains(std::basic_string_view<C> sv) const noexcept { return find(sv) != npos; }
+
+    [[nodiscard]] constexpr bool contains(C ch) const noexcept { return find(ch) != npos; }
+
+    [[nodiscard]] constexpr bool contains(const C* s) const noexcept { return find(s) != npos; }
+
+    [[nodiscard]] constexpr basic_string substr(size_type pos = 0, size_type count = npos) const {
+        if (pos > size_) {
+            INPLACE_THROW_OR_ABORT(std::out_of_range{"inplace::basic_string index out-of-range"});
+        }
+        return basic_string{as_string_view().substr(pos, count)};
+    }
 
     // non-member operator+
     // non-member operator==
@@ -324,6 +493,8 @@ private:
         size_ = static_cast<decltype(size_)>(size);
         data_[size] = terminator;
     }
+
+    [[nodiscard]] constexpr std::basic_string_view<C> as_string_view() const noexcept { return {data_, size_}; }
 };
 
 template <std::size_t S>
